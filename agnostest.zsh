@@ -1,25 +1,24 @@
-# vim:filetype=zsh
-#
 # thetic's Theme
 # An agnoster-inspired, Powerline-inspired theme for ZSH
 # Requires a nerd-font patched font: https://nerdfonts.com/
 # Optimized for gruvbox theme: https://github.com/morhetz/gruvbox-contrib/
 
-# Remove space after right prompt
-ZLE_RPROMPT_INDENT=0
+export VIRTUAL_ENV_DISABLE_PROMPT=1
+
+setopt promptsubst
+autoload -Uz vcs_info
 
 ### Segment drawing
 # A few utility functions to make it easy and re-usable to draw segmented prompts
 
-LEFT_CURRENT_BG='NONE'
-RIGHT_CURRENT_BG='NONE'
-DEFAULT_USER=$(whoami)
+CURRENT_BG='NONE'
+RIGHT_CURRENT_BG=''
 
 # Special Powerline characters
 () {
     local LC_ALL="" LC_CTYPE="en_US.UTF-8"
-    LEFT_SEGMENT_SEPARATOR=$'\ue0b0'  # 
-    LEFT_SUB_SEPARATOR=$'\ue0b1'      # 
+    SEGMENT_SEPARATOR=$'\ue0b0'  # 
+    SUB_SEPARATOR=$'\ue0b1'      # 
     RIGHT_SEGMENT_SEPARATOR=$'\ue0b2' # 
     RIGHT_SUB_SEPARATOR=$'\ue0b3'     # 
 }
@@ -31,34 +30,34 @@ prompt_segment() {
         if [[ $1 != $RIGHT_CURRENT_BG ]]; then
             echo -n " %{%K{$RIGHT_CURRENT_BG}%F{$1}%}$RIGHT_SEGMENT_SEPARATOR%{%K{$1}%F{$2}%} "
         else
-            echo -n "%{%K{$1}%}%{%F{$2}%} $RIGHT_SUB_SEPARATOR "
+            echo -n "%{%K{$1}%F{$2}%} $RIGHT_SUB_SEPARATOR "
         fi
         RIGHT_CURRENT_BG=$1
     else
-        if [[ $LEFT_CURRENT_BG == 'NONE' ]]; then
-            echo -n "%{%K{$1}%}%{%F{$2}%} "
-        elif [[ $1 != $LEFT_CURRENT_BG ]]; then
-            echo -n " %{%K{$1}%F{$LEFT_CURRENT_BG}%}$LEFT_SEGMENT_SEPARATOR%{%F{$2}%} "
+        if [[ $CURRENT_BG == 'NONE' ]]; then
+            echo -n "%{%K{$1}%F{$2}%} "
+        elif [[ $1 != $CURRENT_BG ]]; then
+            echo -n " %{%K{$1}%F{$CURRENT_BG}%}$SEGMENT_SEPARATOR%{%F{$2}%} "
         else
-            echo -n "%{%K{$1}%}%{%F{$2}%} $LEFT_SUB_SEPARATOR "
+            echo -n "%{%K{$1}%F{$2}%} $SUB_SEPARATOR "
         fi
-        LEFT_CURRENT_BG=$1
+        CURRENT_BG=$1
     fi
     [[ -n $3 ]] && echo -n $3
 }
 
 # End the prompt, closing any open segments
 prompt_end() {
-    if [[ $SIDE == left ]]; then
-        if [[ -n $LEFT_CURRENT_BG ]]; then
-            echo -n " %{%k%F{$LEFT_CURRENT_BG}%}$LEFT_SEGMENT_SEPARATOR"
+    if [[ $SIDE == right ]]; then
+        echo -n " %{%f%k%}"
+    else
+        if [[ -n $CURRENT_BG ]]; then
+            echo -n " %{%k%F{$CURRENT_BG}%}${SEGMENT_SEPARATOR}"
         else
             echo -n "%{%k%}"
         fi
         echo -n "%{%f%}"
-        LEFT_CURRENT_BG=''
-    elif [[ $SIDE == right ]]; then
-        echo -n " %{%k%}"
+        CURRENT_BG=''
     fi
 }
 
@@ -68,7 +67,7 @@ prompt_end() {
 # Context: user@hostname (who am I and where am I)
 prompt_context() {
     if [[ "$USER" != "$DEFAULT_USER" || -n "$SSH_CLIENT" ]]; then
-        prompt_segment 109 black "%(!.%{%K{red}%}.)$USER@%m"
+        prompt_segment 208 235 "%(!.%{%K{124}%}.)$USER@%m" # orange
     fi
 }
 
@@ -76,96 +75,99 @@ prompt_context() {
 prompt_git() {
     (( $+commands[git] )) || return
 
-
     if $(git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
-        local repo_path=$(git rev-parse --git-dir 2>/dev/null)
-        local dirty=$(parse_git_dirty)
-        local ref=$(git symbolic-ref HEAD 2> /dev/null) || ref="➦ $(git rev-parse --short HEAD 2> /dev/null)"
-
-        local git_bg
-        if [[ -n $dirty ]]; then
-            git_bg=yellow
-        else
-            git_bg=green
+        local git_bg=214 # yellow
+        if $(git diff --exit-code --quiet --ignore-submodules); then
+            git_bg=142 # green
         fi
 
-        local git_sym merge_sym rebase_sym bisect_sym
+        local git_sym
         () {
             local LC_ALL="" LC_CTYPE="en_US.UTF-8"
-            git_sym=$'\ue725'       # 
-            bisect_sym=$'\ue729'    # 
-            merge_sym=$'\ue727'     # 
-            rebase_sym=$'\ue728'    # 
+            git_sym=$'\ue0a0' # 
         }
-        if [[ -e "${repo_path}/BISECT_LOG" ]]; then
-            git_sym=$bisect_sym
-        elif [[ -e "${repo_path}/MERGE_HEAD" ]]; then
-            git_sym=$merge_sym
-        elif [[ -e "${repo_path}/rebase" || -e "${repo_path}/rebase-apply" || -e "${repo_path}/rebase-merge" || -e "${repo_path}/../.dotest" ]]; then
-            git_sym=$rebase_sym
-        fi
-
-        setopt promptsubst
-        autoload -Uz vcs_info
 
         zstyle ':vcs_info:*' enable git
         zstyle ':vcs_info:*' get-revision      true
         zstyle ':vcs_info:*' check-for-changes true
-        zstyle ':vcs_info:*' stagedstr     '✚'
-        zstyle ':vcs_info:*' unstagedstr   '●'
-        zstyle ':vcs_info:*' formats       ' %u%c'
-        zstyle ':vcs_info:*' actionformats ' %u%c'
+        zstyle ':vcs_info:*' stagedstr   '✚'
+        zstyle ':vcs_info:*' unstagedstr '●'
+        zstyle ':vcs_info:*' formats       '%b %u%c'
+        zstyle ':vcs_info:*' actionformats '%b %u%c'
         vcs_info
-        prompt_segment $git_bg black "${ref/refs\/heads\//$git_sym }${vcs_info_msg_0_%% }"
+        prompt_segment $git_bg 235 "${git_sym} ${vcs_info_msg_0_}"
     fi
 }
 
 # Dir: current working directory
 prompt_dir() {
-    prompt_segment white black '%~'
+    local cwd="${${${${PWD/$HOME/~}%\~}#/}%/*}"
+    if [[ -n $cwd ]]; then
+        local dir_separator=$SUB_SEPARATOR
+        if [[ $SIDE == right ]]; then
+            dir_separator=$RIGHT_SUB_SEPARATOR
+        fi
+        prompt_segment 239 246 "${cwd//\// $dir_separator }" # dark gray
+    fi
+    prompt_segment 246 235 '%c'
 }
 
 # Virtualenv: current working virtualenv
 prompt_virtualenv() {
     local virtualenv_path="$VIRTUAL_ENV"
+    local virtualenv_sym
+    () {
+        local LC_ALL="" LC_CTYPE="en_US.UTF-8"
+        virtualenv_sym=$'\uf81f' # 
+    }
     if [[ -n $virtualenv_path && -n $VIRTUAL_ENV_DISABLE_PROMPT ]]; then
-        prompt_segment blue black " $(basename $virtualenv_path)"
+        prompt_segment 108 235 "$virtualenv_sym $(basename $virtualenv_path)" # aqua
     fi
 }
 
 # Jobs: the number of background jobs
 prompt_jobs() {
     local jobs=$(jobs -l | wc -l)
+    local jobs_sym
+    () {
+        local LC_ALL="" LC_CTYPE="en_US.UTF-8"
+        jobs_sym=$'\u2699' # ⚙
+    }
     if [[ $jobs -gt 0 ]]; then
-        prompt_segment magenta black "⚙ $jobs" # orange
+        prompt_segment 132 235 "$jobs_sym $jobs" # purple
     fi
 }
 
 # Return value: return code of the previous command
 prompt_retval() {
-    [[ $RETVAL -ne 0 ]] && prompt_segment red black "$RETVAL"
+    [[ $RETVAL -ne 0 ]] && prompt_segment 124 235 "$RETVAL" # red
 }
 
 # Vim mode: requires https://github.com/softmoth/zsh-vim-mode
 prompt_vimode() {
-    case "$VIM_MODE_KEYMAP" in
-        "viins")    prompt_segment 109     black "I" ;;
-        "main")     prompt_segment 109     black "I" ;;
-        "vicmd")    prompt_segment white   black "N" ;;
-        "isearch")  prompt_segment magenta black "S" ;;
-        "replace")  prompt_segment 108     black "R";;
-        "visual")   prompt_segment 208     black "V" ;;
-        "vline")    prompt_segment 208     black "V" ;;
+    case $VIM_MODE_KEYMAP in
+        vicmd)        prompt_segment 246 235 "N" ;; # gray
+        isearch)      prompt_segment 214 235 "S" ;; # yellow
+        replace)      prompt_segment 108 235 "R" ;; # aqua
+        visual|vline) prompt_segment 208 235 "V" ;; # orange
+        viins|main)   prompt_segment 109 235 "I" ;; # orange
     esac
 }
 
-## Main prompt
-right_prompt() {
-    SIDE=left
+# Parser status
+prompt_continuation() {
+    if [[ $SIDE == right ]]; then
+        prompt_segment 246 235 '%_' # gray
+    else
+        prompt_segment 246 235 '%^' # gray
+    fi
+}
 
+## Main prompt
+build_prompt() {
+    prompt_vimode
     prompt_context
     prompt_dir
-    prompt_vimode
     prompt_end
 }
 
@@ -176,19 +178,24 @@ build_rprompt() {
 
     prompt_retval
     prompt_jobs
-    prompt_git
     prompt_virtualenv
+    prompt_git
     prompt_end
 }
 
 ## Build continuation prompt
 build_prompt2() {
-    SIDE=left
-    prompt_segment white black '%_'
     prompt_vimode
+    prompt_continuation
     prompt_end
 }
 
-PROMPT='%{%f%b%k%}$(right_prompt) '
+build_rprompt2() {
+    SIDE=right
+    prompt_end
+}
+
+PROMPT='%{%f%b%k%}$(build_prompt) '
 RPROMPT='%{%f%b%k%}$(build_rprompt)'
 PROMPT2='%{%f%b%k%}$(build_prompt2) '
+RPROMPT2='%{%f%b%k%}$(build_rprompt2) '
